@@ -134,8 +134,7 @@ TheLastWitness/
 │       └── ...
 ├── Private/
 │   └── (実装ファイル)
-├── README.md      # 英語版
-└── README_JP.md   # 日本語版（このファイル）
+└── README.md
 ```
 
 ## イベントシステム
