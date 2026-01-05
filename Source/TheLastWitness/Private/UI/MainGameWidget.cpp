@@ -5,8 +5,16 @@
 #include "Core/CaseState.h"
 #include "Dialogue/DialogueManager.h"
 #include "AI/ABELSystem.h"
+#include "UI/EvidenceCardWidget.h"
+#include "UI/CharacterCardWidget.h"
+#include "UI/DialogueChoiceWidget.h"
+#include "UI/ABELSuggestionWidget.h"
+#include "UI/LocationCardWidget.h"
+#include "UI/SuspectCardWidget.h"
+#include "UI/DeductionSlotWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
+#include "Components/Border.h"
 #include "Components/VerticalBox.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/ScrollBox.h"
@@ -24,6 +32,7 @@ void UMainGameWidget::SetupWidget(AWitnessGameMode* InGameMode)
 
 		// イベントをバインド
 		GameMode->OnPhaseChanged.AddDynamic(this, &UMainGameWidget::OnPhaseChanged);
+		GameMode->OnGameEnded.AddDynamic(this, &UMainGameWidget::OnGameEnded);
 
 		if (DialogueManager)
 		{
@@ -105,6 +114,67 @@ void UMainGameWidget::NativeConstruct()
 		ReturnToMenuButton->OnClicked.AddDynamic(this, &UMainGameWidget::OnStartGameClicked);
 	}
 
+	// 移動パネルボタン
+	if (CloseTravelButton)
+	{
+		CloseTravelButton->OnClicked.AddDynamic(this, &UMainGameWidget::HideTravelPanel);
+	}
+
+	// 推理パネルボタン
+	if (MakeDeductionButton)
+	{
+		MakeDeductionButton->OnClicked.AddDynamic(this, &UMainGameWidget::TryMakeDeduction);
+		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] MakeDeductionButton をバインドしました"));
+	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] MakeDeductionButton が見つかりません"));
+	}
+
+	if (CloseDeductionButton)
+	{
+		CloseDeductionButton->OnClicked.AddDynamic(this, &UMainGameWidget::OnContinueClicked);
+		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] CloseDeductionButton をバインドしました"));
+	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] CloseDeductionButton が見つかりません"));
+	}
+
+	// 告発パネルボタン
+	if (CancelAccusationButton)
+	{
+		CancelAccusationButton->OnClicked.AddDynamic(this, &UMainGameWidget::OnContinueClicked);
+	}
+
+	// 証拠帳パネルボタン
+	if (CloseJournalButton)
+	{
+		CloseJournalButton->OnClicked.AddDynamic(this, &UMainGameWidget::HideJournalPanel);
+	}
+
+	// 証拠詳細パネルボタン
+	if (CloseDetailButton)
+	{
+		CloseDetailButton->OnClicked.AddDynamic(this, &UMainGameWidget::HideEvidenceDetail);
+	}
+
+	// ポップアップパネルを初期非表示
+	if (TravelPopupPanel)
+	{
+		TravelPopupPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (JournalPopupPanel)
+	{
+		JournalPopupPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (EvidenceDetailPanel)
+	{
+		EvidenceDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	// 初期状態はメインメニュー
 	SwitchToPanel(EPanelIndex::MainMenu);
 }
@@ -115,6 +185,7 @@ void UMainGameWidget::NativeDestruct()
 	if (GameMode)
 	{
 		GameMode->OnPhaseChanged.RemoveDynamic(this, &UMainGameWidget::OnPhaseChanged);
+		GameMode->OnGameEnded.RemoveDynamic(this, &UMainGameWidget::OnGameEnded);
 	}
 
 	if (DialogueManager)
@@ -176,10 +247,12 @@ void UMainGameWidget::OnPhaseChanged(EGamePhase NewPhase)
 
 	case EGamePhase::Deduction:
 		SwitchToPanel(EPanelIndex::Deduction);
+		UpdateDeductionPanel();
 		break;
 
 	case EGamePhase::Accusation:
 		SwitchToPanel(EPanelIndex::Accusation);
+		UpdateAccusationPanel();
 		break;
 
 	case EGamePhase::Resolution:
@@ -204,8 +277,20 @@ void UMainGameWidget::OnChoicesAvailable(const TArray<FDialogueChoice>& Choices)
 
 		for (const FDialogueChoice& Choice : Choices)
 		{
-			// TODO: 選択肢ボタンウィジェットを動的に生成
-			UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 選択肢: %s"), *Choice.DisplayText.ToString());
+			if (DialogueChoiceClass)
+			{
+				UDialogueChoiceWidget* ChoiceWidget = CreateWidget<UDialogueChoiceWidget>(GetOwningPlayer(), DialogueChoiceClass);
+				if (ChoiceWidget)
+				{
+					ChoiceWidget->SetChoiceData(Choice);
+					ChoiceWidget->OnChoiceSelected.AddDynamic(this, &UMainGameWidget::OnDialogueChoiceSelected);
+					ChoicesBox->AddChild(ChoiceWidget);
+				}
+			}
+			else
+			{
+				UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] DialogueChoiceClassが設定されていません"));
+			}
 		}
 	}
 
@@ -233,6 +318,14 @@ void UMainGameWidget::OnEvidenceCollected(const FEvidence& Evidence)
 
 	// 証拠リストを更新
 	UpdateEvidenceList();
+}
+
+void UMainGameWidget::OnGameEnded(const FGameResult& Result)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] ゲーム終了 - 正解: %s"), Result.bCorrectCulprit ? TEXT("はい") : TEXT("いいえ"));
+
+	// 結果パネルを更新
+	UpdateResultPanel(Result);
 }
 
 // ============================================================================
@@ -282,8 +375,20 @@ void UMainGameWidget::UpdateEvidenceList()
 	const TArray<FEvidence> Evidence = GameMode->GetExaminableEvidenceAtLocation();
 	for (const FEvidence& E : Evidence)
 	{
-		// TODO: 証拠アイテムウィジェットを動的に生成
-		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 調査可能な証拠: %s"), *E.DisplayName.ToString());
+		if (EvidenceCardClass)
+		{
+			UEvidenceCardWidget* Card = CreateWidget<UEvidenceCardWidget>(GetOwningPlayer(), EvidenceCardClass);
+			if (Card)
+			{
+				Card->SetEvidenceData(E);
+				Card->OnCardClicked.AddDynamic(this, &UMainGameWidget::OnEvidenceCardClicked);
+				EvidenceListBox->AddChild(Card);
+			}
+		}
+		else
+		{
+			UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] EvidenceCardClassが設定されていません"));
+		}
 	}
 }
 
@@ -299,8 +404,20 @@ void UMainGameWidget::UpdateCharacterList()
 	const TArray<FCharacterData> Characters = GameMode->GetCharactersAtLocation();
 	for (const FCharacterData& C : Characters)
 	{
-		// TODO: キャラクターアイテムウィジェットを動的に生成
-		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] この場所のキャラクター: %s"), *C.DisplayName.ToString());
+		if (CharacterCardClass)
+		{
+			UCharacterCardWidget* Card = CreateWidget<UCharacterCardWidget>(GetOwningPlayer(), CharacterCardClass);
+			if (Card)
+			{
+				Card->SetCharacterData(C);
+				Card->OnCardClicked.AddDynamic(this, &UMainGameWidget::OnCharacterCardClicked);
+				CharacterListBox->AddChild(Card);
+			}
+		}
+		else
+		{
+			UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] CharacterCardClassが設定されていません"));
+		}
 	}
 }
 
@@ -338,9 +455,21 @@ void UMainGameWidget::UpdateDialoguePanel()
 		}
 
 		// 終了ノードなら続行ボタンのテキストを変更
-		if (ContinueDialogueButton && DialogueManager->IsAtEndNode())
+		if (ContinueDialogueButton)
 		{
-			// TODO: ボタンテキストを「終了」に変更
+			// ボタン内のTextBlockを探して更新
+			UTextBlock* ButtonText = Cast<UTextBlock>(ContinueDialogueButton->GetChildAt(0));
+			if (ButtonText)
+			{
+				if (DialogueManager->IsAtEndNode())
+				{
+					ButtonText->SetText(FText::FromString(TEXT("終了")));
+				}
+				else
+				{
+					ButtonText->SetText(FText::FromString(TEXT("続ける")));
+				}
+			}
 		}
 	}
 }
@@ -357,8 +486,21 @@ void UMainGameWidget::UpdateABELPanel()
 	const TArray<FABELSuggestion> Suggestions = ABELSystem->GetCurrentSuggestions();
 	for (const FABELSuggestion& S : Suggestions)
 	{
-		// TODO: 提案ウィジェットを動的に生成
-		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] ABEL提案: %s"), *S.Content.ToString());
+		if (ABELSuggestionClass)
+		{
+			UABELSuggestionWidget* SuggestionWidget = CreateWidget<UABELSuggestionWidget>(GetOwningPlayer(), ABELSuggestionClass);
+			if (SuggestionWidget)
+			{
+				SuggestionWidget->SetSuggestionData(S);
+				SuggestionWidget->OnAccepted.AddDynamic(this, &UMainGameWidget::OnABELSuggestionAccepted);
+				SuggestionWidget->OnIgnored.AddDynamic(this, &UMainGameWidget::OnABELSuggestionIgnored);
+				ABELSuggestionsBox->AddChild(SuggestionWidget);
+			}
+		}
+		else
+		{
+			UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] ABELSuggestionClassが設定されていません"));
+		}
 	}
 
 	// 保留中のコメントがあれば表示
@@ -414,6 +556,14 @@ void UMainGameWidget::OnContinueClicked()
 		GameMode->SetPhase(EGamePhase::Investigation);
 		break;
 
+	case EGamePhase::Deduction:
+		GameMode->SetPhase(EGamePhase::Investigation);
+		break;
+
+	case EGamePhase::Accusation:
+		GameMode->SetPhase(EGamePhase::Investigation);
+		break;
+
 	default:
 		break;
 	}
@@ -421,14 +571,24 @@ void UMainGameWidget::OnContinueClicked()
 
 void UMainGameWidget::OnExamineClicked()
 {
-	// TODO: 調査可能な証拠を選択するポップアップを表示
 	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 調査ボタンがクリックされました"));
+
+	// 現在のロケーションで調査可能な証拠がある場合、自動的に最初の証拠を調査
+	if (GameMode)
+	{
+		const TArray<FEvidence> Evidence = GameMode->GetExaminableEvidenceAtLocation();
+		if (Evidence.Num() > 0)
+		{
+			// 詳細パネルを表示
+			ShowEvidenceDetail(Evidence[0]);
+		}
+	}
 }
 
 void UMainGameWidget::OnTravelClicked()
 {
-	// TODO: 移動先選択ポップアップを表示
 	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 移動ボタンがクリックされました"));
+	ShowTravelPanel();
 }
 
 void UMainGameWidget::OnConsultABELClicked()
@@ -441,8 +601,8 @@ void UMainGameWidget::OnConsultABELClicked()
 
 void UMainGameWidget::OnJournalClicked()
 {
-	// TODO: 証拠帳ウィジェットを表示
 	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠帳ボタンがクリックされました"));
+	ShowJournalPanel();
 }
 
 void UMainGameWidget::OnDeductionBoardClicked()
@@ -466,5 +626,494 @@ void UMainGameWidget::SwitchToPanel(EPanelIndex PanelIndex)
 	if (PanelSwitcher)
 	{
 		PanelSwitcher->SetActiveWidgetIndex(static_cast<int32>(PanelIndex));
+	}
+}
+
+// ============================================================================
+// 動的ウィジェットイベントハンドラ
+// ============================================================================
+
+void UMainGameWidget::OnEvidenceCardClicked(FName EvidenceId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠カードがクリックされました: %s"), *EvidenceId.ToString());
+
+	if (GameMode)
+	{
+		// 証拠を調査して収集
+		GameMode->ExamineEvidence(EvidenceId);
+		GameMode->CollectEvidence(EvidenceId);
+
+		// リストを更新
+		UpdateEvidenceList();
+	}
+}
+
+void UMainGameWidget::OnCharacterCardClicked(FName CharacterId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] キャラクターカードがクリックされました: %s"), *CharacterId.ToString());
+
+	if (GameMode)
+	{
+		// 対話を開始
+		GameMode->StartDialogueWith(CharacterId);
+	}
+}
+
+void UMainGameWidget::OnDialogueChoiceSelected(FName ChoiceId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 対話選択肢が選ばれました: %s"), *ChoiceId.ToString());
+
+	if (GameMode)
+	{
+		GameMode->SelectDialogueChoice(ChoiceId);
+	}
+}
+
+void UMainGameWidget::OnABELSuggestionAccepted(FName SuggestionId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] ABEL提案を承認しました: %s"), *SuggestionId.ToString());
+
+	if (GameMode)
+	{
+		GameMode->FollowABELSuggestion(SuggestionId);
+	}
+}
+
+void UMainGameWidget::OnABELSuggestionIgnored(FName SuggestionId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] ABEL提案を無視しました: %s"), *SuggestionId.ToString());
+
+	if (GameMode)
+	{
+		GameMode->IgnoreABELSuggestion(SuggestionId);
+	}
+}
+
+void UMainGameWidget::OnLocationCardClicked(ELocation Location)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] ロケーションが選択されました: %d"), static_cast<int32>(Location));
+
+	HideTravelPanel();
+
+	if (GameMode)
+	{
+		GameMode->TravelToLocation(Location);
+
+		// 場所変更後にUIを更新
+		UpdateLocationPanel();
+	}
+}
+
+void UMainGameWidget::OnSuspectAccused(FName CharacterId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 容疑者を告発しました: %s"), *CharacterId.ToString());
+
+	if (GameMode)
+	{
+		GameMode->AccuseCharacter(CharacterId);
+	}
+}
+
+void UMainGameWidget::OnDeductionSlotClicked(int32 SlotIndex)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理スロット%dがクリックされました"), SlotIndex);
+	CurrentDeductionSlot = SlotIndex;
+
+	// 選択状態を表示
+	if (DeductionResultText)
+	{
+		DeductionResultText->SetText(FText::FromString(FString::Printf(TEXT("スロット%dに配置する証拠を選択してください"), SlotIndex + 1)));
+	}
+
+	// スロットの選択状態を視覚的に更新
+	for (int32 i = 0; i < DeductionSlots.Num(); i++)
+	{
+		if (DeductionSlots[i])
+		{
+			DeductionSlots[i]->SetSelected(i == SlotIndex);
+		}
+	}
+}
+
+void UMainGameWidget::OnDeductionSlotCleared(int32 SlotIndex)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理スロット%dがクリアされました"), SlotIndex);
+
+	if (SlotIndex >= 0 && SlotIndex < DeductionSlotEvidence.Num())
+	{
+		DeductionSlotEvidence[SlotIndex] = NAME_None;
+	}
+}
+
+// ============================================================================
+// 移動・推理・告発パネル
+// ============================================================================
+
+void UMainGameWidget::ShowTravelPanel()
+{
+	if (!TravelPopupPanel || !LocationListBox || !CaseState)
+	{
+		return;
+	}
+
+	LocationListBox->ClearChildren();
+
+	// 全てのアクセス可能なロケーションを表示
+	const TArray<FLocationData> Locations = CaseState->GetAccessibleLocations();
+	const ELocation CurrentLoc = CaseState->GetCurrentLocation();
+
+	for (const FLocationData& Loc : Locations)
+	{
+		if (LocationCardClass)
+		{
+			ULocationCardWidget* Card = CreateWidget<ULocationCardWidget>(GetOwningPlayer(), LocationCardClass);
+			if (Card)
+			{
+				Card->SetLocationData(Loc);
+				Card->SetAsCurrent(Loc.Location == CurrentLoc);
+				Card->OnCardClicked.AddDynamic(this, &UMainGameWidget::OnLocationCardClicked);
+				LocationListBox->AddChild(Card);
+			}
+		}
+	}
+
+	TravelPopupPanel->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UMainGameWidget::HideTravelPanel()
+{
+	if (TravelPopupPanel)
+	{
+		TravelPopupPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UMainGameWidget::UpdateDeductionPanel()
+{
+	if (!CaseState)
+	{
+		return;
+	}
+
+	// 推理スロットを初期化
+	DeductionSlotEvidence.SetNum(2);
+	DeductionSlotEvidence[0] = NAME_None;
+	DeductionSlotEvidence[1] = NAME_None;
+	DeductionSlots.Empty();
+
+	// 推理スロットを作成
+	if (DeductionSlotsBox && DeductionSlotClass)
+	{
+		DeductionSlotsBox->ClearChildren();
+
+		for (int32 i = 0; i < 2; i++)
+		{
+			UDeductionSlotWidget* SlotWidget = CreateWidget<UDeductionSlotWidget>(GetOwningPlayer(), DeductionSlotClass);
+			if (SlotWidget)
+			{
+				SlotWidget->SetSlotIndex(i);
+				SlotWidget->OnSlotClicked.AddDynamic(this, &UMainGameWidget::OnDeductionSlotClicked);
+				SlotWidget->OnSlotCleared.AddDynamic(this, &UMainGameWidget::OnDeductionSlotCleared);
+				DeductionSlotsBox->AddChild(SlotWidget);
+				DeductionSlots.Add(SlotWidget);
+			}
+		}
+	}
+
+	// 収集済み証拠を表示（推理用）
+	if (CollectedEvidenceBox && EvidenceCardClass)
+	{
+		CollectedEvidenceBox->ClearChildren();
+
+		const TArray<FEvidence> CollectedEvidence = CaseState->GetCollectedEvidence();
+		for (const FEvidence& E : CollectedEvidence)
+		{
+			UEvidenceCardWidget* Card = CreateWidget<UEvidenceCardWidget>(GetOwningPlayer(), EvidenceCardClass);
+			if (Card)
+			{
+				Card->SetEvidenceData(E);
+				// 推理用のクリックハンドラを使用
+				Card->OnCardClicked.AddDynamic(this, &UMainGameWidget::OnDeductionEvidenceCardClicked);
+				CollectedEvidenceBox->AddChild(Card);
+			}
+		}
+	}
+
+	// 推理結果テキストをクリア
+	if (DeductionResultText)
+	{
+		DeductionResultText->SetText(FText::GetEmpty());
+	}
+}
+
+void UMainGameWidget::UpdateAccusationPanel()
+{
+	if (!SuspectListBox || !CaseState)
+	{
+		return;
+	}
+
+	SuspectListBox->ClearChildren();
+
+	// 全ての容疑者を表示
+	const TArray<FCharacterData> Suspects = CaseState->GetAllSuspects();
+	for (const FCharacterData& S : Suspects)
+	{
+		if (SuspectCardClass)
+		{
+			USuspectCardWidget* Card = CreateWidget<USuspectCardWidget>(GetOwningPlayer(), SuspectCardClass);
+			if (Card)
+			{
+				Card->SetSuspectData(S);
+				Card->OnAccused.AddDynamic(this, &UMainGameWidget::OnSuspectAccused);
+				SuspectListBox->AddChild(Card);
+			}
+		}
+	}
+}
+
+void UMainGameWidget::UpdateResultPanel(const FGameResult& Result)
+{
+	if (ResultTitleText)
+	{
+		if (Result.bCorrectCulprit)
+		{
+			ResultTitleText->SetText(FText::FromString(TEXT("事件解決")));
+		}
+		else
+		{
+			ResultTitleText->SetText(FText::FromString(TEXT("冤罪...")));
+		}
+	}
+
+	if (ResultNarrativeText)
+	{
+		ResultNarrativeText->SetText(Result.EndingNarrative);
+	}
+}
+
+void UMainGameWidget::TryMakeDeduction()
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理ボタンがクリックされました"));
+
+	if (!GameMode || DeductionSlotEvidence.Num() < 2)
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] GameModeがないか、スロットが不足"));
+		return;
+	}
+
+	if (DeductionSlotEvidence[0].IsNone() || DeductionSlotEvidence[1].IsNone())
+	{
+		if (DeductionResultText)
+		{
+			DeductionResultText->SetText(FText::FromString(TEXT("2つの証拠を選択してください")));
+		}
+		return;
+	}
+
+	const bool bSuccess = GameMode->TryMakeDeduction(DeductionSlotEvidence[0], DeductionSlotEvidence[1]);
+
+	if (DeductionResultText)
+	{
+		if (bSuccess)
+		{
+			DeductionResultText->SetText(FText::FromString(TEXT("新たな推理を導きました！")));
+		}
+		else
+		{
+			DeductionResultText->SetText(FText::FromString(TEXT("この組み合わせからは何も導けません...")));
+		}
+	}
+
+	// スロットをクリア
+	for (UDeductionSlotWidget* SlotWidget : DeductionSlots)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->ClearEvidence();
+		}
+	}
+}
+
+// ============================================================================
+// 証拠帳パネル
+// ============================================================================
+
+void UMainGameWidget::ShowJournalPanel()
+{
+	if (!JournalPopupPanel || !JournalEvidenceListBox || !CaseState)
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] 証拠帳パネルが設定されていません"));
+		return;
+	}
+
+	JournalEvidenceListBox->ClearChildren();
+
+	// 収集済み証拠を表示
+	const TArray<FEvidence> CollectedEvidence = CaseState->GetCollectedEvidence();
+	for (const FEvidence& E : CollectedEvidence)
+	{
+		if (EvidenceCardClass)
+		{
+			UEvidenceCardWidget* Card = CreateWidget<UEvidenceCardWidget>(GetOwningPlayer(), EvidenceCardClass);
+			if (Card)
+			{
+				Card->SetEvidenceData(E);
+				Card->OnCardClicked.AddDynamic(this, &UMainGameWidget::OnJournalEvidenceCardClicked);
+				JournalEvidenceListBox->AddChild(Card);
+			}
+		}
+	}
+
+	JournalPopupPanel->SetVisibility(ESlateVisibility::Visible);
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠帳を表示 (証拠数: %d)"), CollectedEvidence.Num());
+}
+
+void UMainGameWidget::HideJournalPanel()
+{
+	if (JournalPopupPanel)
+	{
+		JournalPopupPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UMainGameWidget::OnJournalEvidenceCardClicked(FName EvidenceId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠帳の証拠がクリックされました: %s"), *EvidenceId.ToString());
+
+	if (CaseState)
+	{
+		FEvidence Evidence;
+		if (CaseState->GetEvidenceById(EvidenceId, Evidence))
+		{
+			ShowEvidenceDetail(Evidence);
+		}
+	}
+}
+
+// ============================================================================
+// 証拠詳細パネル
+// ============================================================================
+
+void UMainGameWidget::ShowEvidenceDetail(const FEvidence& Evidence)
+{
+	if (!EvidenceDetailPanel)
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] 証拠詳細パネルが設定されていません"));
+		return;
+	}
+
+	// 証拠名
+	if (DetailEvidenceNameText)
+	{
+		DetailEvidenceNameText->SetText(Evidence.DisplayName);
+	}
+
+	// 証拠タイプ
+	if (DetailEvidenceTypeText)
+	{
+		FText TypeText;
+		switch (Evidence.Type)
+		{
+		case EEvidenceType::Physical:
+			TypeText = FText::FromString(TEXT("物的証拠"));
+			break;
+		case EEvidenceType::Document:
+			TypeText = FText::FromString(TEXT("文書"));
+			break;
+		case EEvidenceType::Testimony:
+			TypeText = FText::FromString(TEXT("証言"));
+			break;
+		case EEvidenceType::Observation:
+			TypeText = FText::FromString(TEXT("観察"));
+			break;
+		default:
+			TypeText = FText::FromString(TEXT("不明"));
+			break;
+		}
+		DetailEvidenceTypeText->SetText(TypeText);
+	}
+
+	// 説明
+	if (DetailEvidenceDescText)
+	{
+		DetailEvidenceDescText->SetText(Evidence.Description);
+	}
+
+	// ABELコメント
+	if (DetailABELCommentText)
+	{
+		if (Evidence.ABELComment.IsEmpty())
+		{
+			DetailABELCommentText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			DetailABELCommentText->SetText(Evidence.ABELComment);
+			DetailABELCommentText->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+
+	EvidenceDetailPanel->SetVisibility(ESlateVisibility::Visible);
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠詳細を表示: %s"), *Evidence.EvidenceId.ToString());
+}
+
+void UMainGameWidget::HideEvidenceDetail()
+{
+	if (EvidenceDetailPanel)
+	{
+		EvidenceDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+// ============================================================================
+// 推理用証拠選択
+// ============================================================================
+
+void UMainGameWidget::OnDeductionEvidenceCardClicked(FName EvidenceId)
+{
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理用証拠がクリックされました: %s (スロット: %d)"), *EvidenceId.ToString(), CurrentDeductionSlot);
+
+	// スロットが選択されていない場合は無視
+	if (CurrentDeductionSlot < 0 || CurrentDeductionSlot >= DeductionSlots.Num())
+	{
+		return;
+	}
+
+	// 既に同じ証拠がスロットにある場合は無視
+	for (const FName& SlotEvidence : DeductionSlotEvidence)
+	{
+		if (SlotEvidence == EvidenceId)
+		{
+			if (DeductionResultText)
+			{
+				DeductionResultText->SetText(FText::FromString(TEXT("同じ証拠は選択できません")));
+			}
+			return;
+		}
+	}
+
+	// 証拠をスロットに設定
+	if (CaseState)
+	{
+		FEvidence Evidence;
+		if (CaseState->GetEvidenceById(EvidenceId, Evidence))
+		{
+			DeductionSlotEvidence[CurrentDeductionSlot] = EvidenceId;
+
+			if (DeductionSlots[CurrentDeductionSlot])
+			{
+				DeductionSlots[CurrentDeductionSlot]->SetEvidence(Evidence);
+			}
+
+			// スロット選択を解除
+			CurrentDeductionSlot = -1;
+
+			// 結果テキストをクリア
+			if (DeductionResultText)
+			{
+				DeductionResultText->SetText(FText::GetEmpty());
+			}
+		}
 	}
 }

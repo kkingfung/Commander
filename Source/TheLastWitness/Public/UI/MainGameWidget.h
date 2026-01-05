@@ -16,6 +16,17 @@ class UButton;
 class UVerticalBox;
 class UWidgetSwitcher;
 class UScrollBox;
+class UEvidenceCardWidget;
+class UCharacterCardWidget;
+class UDialogueChoiceWidget;
+class UABELSuggestionWidget;
+class ULocationCardWidget;
+class USuspectCardWidget;
+class UDeductionSlotWidget;
+class UEvidenceDetailWidget;
+class UBorder;
+class UImage;
+class UOverlay;
 
 /// <summary>
 /// メインゲームUIウィジェット
@@ -72,6 +83,12 @@ protected:
 	/// </summary>
 	UFUNCTION()
 	void OnEvidenceCollected(const FEvidence& Evidence);
+
+	/// <summary>
+	/// ゲーム終了時
+	/// </summary>
+	UFUNCTION()
+	void OnGameEnded(const FGameResult& Result);
 
 	// ========================================================================
 	// UI更新
@@ -246,6 +263,192 @@ protected:
 	TObjectPtr<UButton> ReturnToMenuButton;
 
 	// ========================================================================
+	// 動的ウィジェットクラス
+	// ========================================================================
+
+	/// <summary>証拠カードウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<UEvidenceCardWidget> EvidenceCardClass;
+
+	/// <summary>キャラクターカードウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<UCharacterCardWidget> CharacterCardClass;
+
+	/// <summary>対話選択肢ウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<UDialogueChoiceWidget> DialogueChoiceClass;
+
+	/// <summary>ABEL提案ウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<UABELSuggestionWidget> ABELSuggestionClass;
+
+	/// <summary>ロケーションカードウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<ULocationCardWidget> LocationCardClass;
+
+	/// <summary>容疑者カードウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<USuspectCardWidget> SuspectCardClass;
+
+	/// <summary>推理スロットウィジェットクラス</summary>
+	UPROPERTY(EditDefaultsOnly, Category = "Widget Classes")
+	TSubclassOf<UDeductionSlotWidget> DeductionSlotClass;
+
+	// ========================================================================
+	// 動的ウィジェットイベントハンドラ
+	// ========================================================================
+
+	/// <summary>証拠カードクリック時</summary>
+	UFUNCTION()
+	void OnEvidenceCardClicked(FName EvidenceId);
+
+	/// <summary>キャラクターカードクリック時</summary>
+	UFUNCTION()
+	void OnCharacterCardClicked(FName CharacterId);
+
+	/// <summary>対話選択肢選択時</summary>
+	UFUNCTION()
+	void OnDialogueChoiceSelected(FName ChoiceId);
+
+	/// <summary>ABEL提案承認時</summary>
+	UFUNCTION()
+	void OnABELSuggestionAccepted(FName SuggestionId);
+
+	/// <summary>ABEL提案無視時</summary>
+	UFUNCTION()
+	void OnABELSuggestionIgnored(FName SuggestionId);
+
+	/// <summary>ロケーションカードクリック時</summary>
+	UFUNCTION()
+	void OnLocationCardClicked(ELocation Location);
+
+	/// <summary>容疑者告発時</summary>
+	UFUNCTION()
+	void OnSuspectAccused(FName CharacterId);
+
+	/// <summary>推理スロットクリック時</summary>
+	UFUNCTION()
+	void OnDeductionSlotClicked(int32 SlotIndex);
+
+	/// <summary>推理スロットクリア時</summary>
+	UFUNCTION()
+	void OnDeductionSlotCleared(int32 SlotIndex);
+
+	// ========================================================================
+	// 推理・告発・移動パネル
+	// ========================================================================
+
+	/// <summary>移動パネルを表示します</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowTravelPanel();
+
+	/// <summary>移動パネルを非表示にします</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void HideTravelPanel();
+
+	/// <summary>推理パネルを更新します</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void UpdateDeductionPanel();
+
+	/// <summary>告発パネルを更新します</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void UpdateAccusationPanel();
+
+	/// <summary>結果パネルを更新します</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void UpdateResultPanel(const FGameResult& Result);
+
+	/// <summary>推理を試みます</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void TryMakeDeduction();
+
+	/// <summary>証拠帳パネルを表示します</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowJournalPanel();
+
+	/// <summary>証拠帳パネルを非表示にします</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void HideJournalPanel();
+
+	/// <summary>証拠詳細パネルを表示します</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowEvidenceDetail(const FEvidence& Evidence);
+
+	/// <summary>証拠詳細パネルを非表示にします</summary>
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void HideEvidenceDetail();
+
+	/// <summary>証拠帳からの証拠カードクリック時</summary>
+	UFUNCTION()
+	void OnJournalEvidenceCardClicked(FName EvidenceId);
+
+	/// <summary>推理用の証拠カードクリック時</summary>
+	UFUNCTION()
+	void OnDeductionEvidenceCardClicked(FName EvidenceId);
+
+	// ----- 移動パネル (ポップアップ) -----
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> TravelPopupPanel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> LocationListBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> CloseTravelButton;
+
+	// ----- 推理パネル -----
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> CollectedEvidenceBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> DeductionSlotsBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> MakeDeductionButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DeductionResultText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> CloseDeductionButton;
+
+	// ----- 告発パネル -----
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> SuspectListBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> CancelAccusationButton;
+
+	// ----- 証拠帳パネル (ポップアップ) -----
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> JournalPopupPanel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> JournalEvidenceListBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> CloseJournalButton;
+
+	// ----- 証拠詳細パネル (ポップアップ) -----
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> EvidenceDetailPanel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DetailEvidenceNameText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DetailEvidenceTypeText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DetailEvidenceDescText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DetailABELCommentText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> CloseDetailButton;
+
+	// ========================================================================
 	// 参照
 	// ========================================================================
 
@@ -281,4 +484,14 @@ private:
 	/// 指定したパネルに切り替えます
 	/// </summary>
 	void SwitchToPanel(EPanelIndex PanelIndex);
+
+	/// <summary>推理スロットに設定された証拠ID（2つ）</summary>
+	TArray<FName> DeductionSlotEvidence;
+
+	/// <summary>現在選択中の推理スロットインデックス</summary>
+	int32 CurrentDeductionSlot = -1;
+
+	/// <summary>推理スロットウィジェットの参照</summary>
+	UPROPERTY()
+	TArray<TObjectPtr<UDeductionSlotWidget>> DeductionSlots;
 };
