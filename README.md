@@ -2,6 +2,9 @@
 
 Unreal Engine 5 で開発されたヴィクトリア朝時代の探偵推理ゲーム。
 
+<img src="/Result1.PNG" width="300">
+<img src="/Result2.PNG" width="300">
+
 ## 概要
 
 **The Last Witness** は、ヴィクトリア朝ロンドンを舞台にしたナラティブ駆動型の探偵ゲームです。プレイヤーは、証拠分析と論理的推論を支援するAIコンパニオン「ABEL（Analytical Bureau for Evidence and Logic）」と共に、事件の真相を追求する捜査官となります。
