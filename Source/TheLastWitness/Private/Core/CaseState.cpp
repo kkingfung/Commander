@@ -129,19 +129,32 @@ bool UCaseState::GetEvidenceById(FName EvidenceId, FEvidence& OutEvidence) const
 
 bool UCaseState::TryDeduction(FName EvidenceA, FName EvidenceB, FDeduction& OutDeduction)
 {
+	UE_LOG(LogLastWitness, Log, TEXT("[CaseState] TryDeduction: %s + %s"), *EvidenceA.ToString(), *EvidenceB.ToString());
+
 	// 両方の証拠を持っているか確認
-	if (!HasEvidence(EvidenceA) || !HasEvidence(EvidenceB))
+	const bool bHasA = HasEvidence(EvidenceA);
+	const bool bHasB = HasEvidence(EvidenceB);
+
+	UE_LOG(LogLastWitness, Log, TEXT("[CaseState] 証拠所持確認 - %s: %s, %s: %s"),
+		*EvidenceA.ToString(), bHasA ? TEXT("あり") : TEXT("なし"),
+		*EvidenceB.ToString(), bHasB ? TEXT("あり") : TEXT("なし"));
+
+	if (!bHasA || !bHasB)
 	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[CaseState] 証拠が不足しています"));
 		return false;
 	}
+
+	UE_LOG(LogLastWitness, Log, TEXT("[CaseState] 推理データ数: %d"), CaseData.AllDeductions.Num());
 
 	// 一致する推理を探す
 	for (FDeduction& Deduction : CaseData.AllDeductions)
 	{
-		if (Deduction.bIsUnlocked)
-		{
-			continue; // 既に解放済み
-		}
+		UE_LOG(LogLastWitness, Log, TEXT("[CaseState] 推理チェック: %s (%s + %s) - 解放済み: %s"),
+			*Deduction.DeductionId.ToString(),
+			*Deduction.EvidenceA.ToString(),
+			*Deduction.EvidenceB.ToString(),
+			Deduction.bIsUnlocked ? TEXT("Yes") : TEXT("No"));
 
 		// 順番に関係なく一致するかチェック
 		const bool bMatches = (Deduction.EvidenceA == EvidenceA && Deduction.EvidenceB == EvidenceB) ||
@@ -149,6 +162,16 @@ bool UCaseState::TryDeduction(FName EvidenceA, FName EvidenceB, FDeduction& OutD
 
 		if (bMatches)
 		{
+			OutDeduction = Deduction;
+
+			// 既に解放済みの場合は結果のみ返す（フラグは再設定しない）
+			if (Deduction.bIsUnlocked)
+			{
+				UE_LOG(LogLastWitness, Log, TEXT("[CaseState] 既に解放済みの推理を再表示: %s"), *Deduction.DeductionId.ToString());
+				return true;
+			}
+
+			// 新規解放
 			Deduction.bIsUnlocked = true;
 
 			// フラグを設定
@@ -159,13 +182,13 @@ bool UCaseState::TryDeduction(FName EvidenceA, FName EvidenceB, FDeduction& OutD
 
 			UE_LOG(LogLastWitness, Log, TEXT("[CaseState] 推理を解放しました: %s"), *Deduction.DeductionId.ToString());
 
-			OutDeduction = Deduction;
 			OnDeductionUnlocked.Broadcast(Deduction);
 
 			return true;
 		}
 	}
 
+	UE_LOG(LogLastWitness, Log, TEXT("[CaseState] 一致する推理が見つかりませんでした"));
 	return false;
 }
 

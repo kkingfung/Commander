@@ -35,6 +35,12 @@ void UCharacterCardWidget::SetCharacterData(const FCharacterData& InCharacter)
 		TrustBar->SetFillColorAndOpacity(GetTrustColor());
 	}
 
+	// 信頼度テキストを設定
+	if (TrustLevelText)
+	{
+		TrustLevelText->SetText(FText::FromString(FString::Printf(TEXT("信頼度: %d"), CharacterData.TrustLevel)));
+	}
+
 	// 感情状態を設定
 	if (EmotionText)
 	{

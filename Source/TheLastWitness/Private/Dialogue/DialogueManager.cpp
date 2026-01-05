@@ -69,9 +69,30 @@ bool UDialogueManager::StartDialogue(FName CharacterId)
 
 void UDialogueManager::SelectChoice(FName ChoiceId)
 {
+	UE_LOG(LogLastWitness, Log, TEXT("[DialogueManager] SelectChoice called - ChoiceId: %s, bIsInDialogue: %s, CurrentNodeId: %s"),
+		*ChoiceId.ToString(),
+		bIsInDialogue ? TEXT("true") : TEXT("false"),
+		*CurrentNodeId.ToString());
+
 	if (!bIsInDialogue)
 	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[DialogueManager] 対話中ではありません"));
 		return;
+	}
+
+	// 現在のノードをデバッグ出力
+	const FDialogueNode* CurrentNode = FindNodeById(CurrentNodeId);
+	if (CurrentNode)
+	{
+		UE_LOG(LogLastWitness, Log, TEXT("[DialogueManager] CurrentNode found - Choices count: %d"), CurrentNode->Choices.Num());
+		for (const FDialogueChoice& C : CurrentNode->Choices)
+		{
+			UE_LOG(LogLastWitness, Log, TEXT("[DialogueManager]   Choice: %s"), *C.ChoiceId.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[DialogueManager] CurrentNode not found! CurrentTree.Nodes count: %d"), CurrentTree.Nodes.Num());
 	}
 
 	const FDialogueChoice* Choice = FindChoiceById(ChoiceId);
@@ -277,12 +298,9 @@ void UDialogueManager::GoToNode(FName NodeId)
 	// イベント発火
 	OnDialogueNodeChanged.Broadcast(*Node);
 
-	// 選択肢があれば通知
+	// 選択肢を通知（空の場合もUIが古い選択肢をクリアできるように）
 	const TArray<FDialogueChoice> Choices = GetAvailableChoices();
-	if (Choices.Num() > 0)
-	{
-		OnChoicesAvailable.Broadcast(Choices);
-	}
+	OnChoicesAvailable.Broadcast(Choices);
 }
 
 bool UDialogueManager::CanShowChoice(const FDialogueChoice& Choice) const

@@ -154,8 +154,12 @@ public:
 	/// <summary>
 	/// 2つの証拠を結びつけて推理を試みます
 	/// </summary>
+	/// <param name="EvidenceA">証拠A</param>
+	/// <param name="EvidenceB">証拠B</param>
+	/// <param name="OutDeduction">成功時の推理データ</param>
+	/// <returns>推理が成功したかどうか</returns>
 	UFUNCTION(BlueprintCallable, Category = "Deduction")
-	bool TryMakeDeduction(FName EvidenceA, FName EvidenceB);
+	bool TryMakeDeduction(FName EvidenceA, FName EvidenceB, FDeduction& OutDeduction);
 
 	// ========================================================================
 	// 告発

@@ -15,10 +15,17 @@ void UDialogueChoiceWidget::SetChoiceData(const FDialogueChoice& InChoice)
 {
 	ChoiceData = InChoice;
 
+	UE_LOG(LogLastWitness, Log, TEXT("[DialogueChoice] SetChoiceData called - DisplayText: %s"), *ChoiceData.DisplayText.ToString());
+
 	// 選択肢テキストを設定
 	if (ChoiceText)
 	{
 		ChoiceText->SetText(ChoiceData.DisplayText);
+		UE_LOG(LogLastWitness, Log, TEXT("[DialogueChoice] ChoiceText を設定しました"));
+	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[DialogueChoice] ChoiceText が見つかりません"));
 	}
 
 	// トーンインジケーターの色を設定

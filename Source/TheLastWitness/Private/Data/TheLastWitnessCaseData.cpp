@@ -773,6 +773,207 @@ TArray<FDialogueTree> UTheLastWitnessCaseData::CreateDialogues()
 		Dialogues.Add(Tree);
 	}
 
+	// トーマス・ハート（執事）との対話
+	{
+		FDialogueTree Tree;
+		Tree.TreeId = FName("Dialogue_Thomas");
+		Tree.CharacterId = FName("ThomasHart");
+		Tree.StartNodeId = FName("Thomas_Start");
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("Thomas_Start");
+			Node.SpeakerId = FName("ThomasHart");
+			Node.Text = FText::FromString(TEXT(
+				"探偵さん、ようこそいらっしゃいました。\n"
+				"この屋敷のことでしたら、何でもお聞きください。\n"
+				"30年仕えておりますから。"
+			));
+			Node.Emotion = EEmotionalState::Neutral;
+
+			FDialogueChoice Choice1;
+			Choice1.ChoiceId = FName("Thomas_Choice_Night");
+			Choice1.DisplayText = FText::FromString(TEXT("事件の夜のことを教えてください。"));
+			Choice1.Tone = EDialogueTone::Polite;
+			Choice1.NextNodeId = FName("Thomas_Night");
+			Node.Choices.Add(Choice1);
+
+			FDialogueChoice Choice2;
+			Choice2.ChoiceId = FName("Thomas_Choice_Edward");
+			Choice2.DisplayText = FText::FromString(TEXT("エドワード様についてどう思いますか？"));
+			Choice2.Tone = EDialogueTone::Direct;
+			Choice2.NextNodeId = FName("Thomas_Edward");
+			Node.Choices.Add(Choice2);
+
+			FDialogueChoice Choice3;
+			Choice3.ChoiceId = FName("Thomas_Choice_Secret");
+			Choice3.DisplayText = FText::FromString(TEXT("この屋敷には何か秘密が？"));
+			Choice3.Tone = EDialogueTone::Cunning;
+			Choice3.NextNodeId = FName("Thomas_Secret");
+			Node.Choices.Add(Choice3);
+
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("Thomas_Night");
+			Node.SpeakerId = FName("ThomasHart");
+			Node.Text = FText::FromString(TEXT(
+				"あの夜は...私は外出しておりました。\n"
+				"妹の家を訪ねていたのです。毎月一度の習慣で。\n"
+				"戻った時には、もう...大騒ぎになっておりました。"
+			));
+			Node.Emotion = EEmotionalState::Sad;
+			Node.NextNodeId = FName("Thomas_End");
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("Thomas_Edward");
+			Node.SpeakerId = FName("ThomasHart");
+			Node.Text = FText::FromString(TEXT(
+				"エドワード様は...その、正直に申し上げますと...\n"
+				"旦那様とは違い、少々浪費癖がおありでした。\n"
+				"最近、旦那様と頻繁に言い争いをされていたのは存じております。"
+			));
+			Node.Emotion = EEmotionalState::Nervous;
+			Node.SetsFlags.Add(FName("Flag_ThomasKnowsArgument"));
+			Node.NextNodeId = FName("Thomas_End");
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("Thomas_Secret");
+			Node.SpeakerId = FName("ThomasHart");
+			Node.Text = FText::FromString(TEXT(
+				"秘密...ですか。\n"
+				"古い屋敷には、どこも秘密があるものです。\n"
+				"ただ...書斎の窓の掛け金が、少し変わった構造になっていることは\n"
+				"ご存知でしょうか？"
+			));
+			Node.Emotion = EEmotionalState::Neutral;
+			Node.SetsFlags.Add(FName("Flag_ThomasHintLatch"));
+			Node.NextNodeId = FName("Thomas_End");
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("Thomas_End");
+			Node.SpeakerId = FName("ThomasHart");
+			Node.Text = FText::FromString(TEXT(
+				"他に何かございましたら、いつでもお呼びください。"
+			));
+			Node.bIsEndNode = true;
+			Tree.Nodes.Add(Node);
+		}
+
+		Dialogues.Add(Tree);
+	}
+
+	// ジェームズ・モーガン（工場監督）との対話
+	{
+		FDialogueTree Tree;
+		Tree.TreeId = FName("Dialogue_James");
+		Tree.CharacterId = FName("JamesMorgan");
+		Tree.StartNodeId = FName("James_Start");
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("James_Start");
+			Node.SpeakerId = FName("JamesMorgan");
+			Node.Text = FText::FromString(TEXT(
+				"何の用だ？ 見ての通り忙しいんだ。\n"
+				"ブラックウッド卿の死？ 自殺だろう。\n"
+				"警察もそう言っている。"
+			));
+			Node.Emotion = EEmotionalState::Defensive;
+
+			FDialogueChoice Choice1;
+			Choice1.ChoiceId = FName("James_Choice_Reform");
+			Choice1.DisplayText = FText::FromString(TEXT("労働改革計画についてどう思いますか？"));
+			Choice1.Tone = EDialogueTone::Direct;
+			Choice1.NextNodeId = FName("James_Reform");
+			Node.Choices.Add(Choice1);
+
+			FDialogueChoice Choice2;
+			Choice2.ChoiceId = FName("James_Choice_Finance");
+			Choice2.DisplayText = FText::FromString(TEXT("工場の財務状況について聞きたい。"));
+			Choice2.Tone = EDialogueTone::Cunning;
+			Choice2.NextNodeId = FName("James_Finance");
+			Node.Choices.Add(Choice2);
+
+			FDialogueChoice Choice3;
+			Choice3.ChoiceId = FName("James_Choice_Threaten");
+			Choice3.DisplayText = FText::FromString(TEXT("あなたも容疑者の一人だ。協力しないと困るのはあなただ。"));
+			Choice3.Tone = EDialogueTone::Intimidating;
+			Choice3.NextNodeId = FName("James_Angry");
+			Choice3.TrustDelta = -20;
+			Node.Choices.Add(Choice3);
+
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("James_Reform");
+			Node.SpeakerId = FName("JamesMorgan");
+			Node.Text = FText::FromString(TEXT(
+				"労働改革？ ふん、甘い考えだ。\n"
+				"労働者を甘やかせば、生産性は落ちる。\n"
+				"旦那様には反対したが...聞き入れてもらえなかった。"
+			));
+			Node.Emotion = EEmotionalState::Angry;
+			Node.SetsFlags.Add(FName("Flag_JamesOpposedReform"));
+			Node.NextNodeId = FName("James_End");
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("James_Finance");
+			Node.SpeakerId = FName("JamesMorgan");
+			Node.Text = FText::FromString(TEXT(
+				"財務？ それは私の管轄じゃない。\n"
+				"ただ...最近、設備投資の名目で大金が動いていたのは知っている。\n"
+				"実際に新しい設備なんか入っていないがな。エドワード様が何か知っているだろう。"
+			));
+			Node.Emotion = EEmotionalState::Neutral;
+			Node.SetsFlags.Add(FName("Flag_JamesKnowsFinance"));
+			Node.NextNodeId = FName("James_End");
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("James_Angry");
+			Node.SpeakerId = FName("JamesMorgan");
+			Node.Text = FText::FromString(TEXT(
+				"脅しか？ 私は何もやましいことはない！\n"
+				"帰れ！ これ以上話すことはない！"
+			));
+			Node.Emotion = EEmotionalState::Angry;
+			Node.bIsEndNode = true;
+			Tree.Nodes.Add(Node);
+		}
+
+		{
+			FDialogueNode Node;
+			Node.NodeId = FName("James_End");
+			Node.SpeakerId = FName("JamesMorgan");
+			Node.Text = FText::FromString(TEXT(
+				"もういいだろう。仕事に戻らせてもらう。"
+			));
+			Node.bIsEndNode = true;
+			Tree.Nodes.Add(Node);
+		}
+
+		Dialogues.Add(Tree);
+	}
+
 	return Dialogues;
 }
 

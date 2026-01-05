@@ -427,6 +427,9 @@ protected:
 	TObjectPtr<UVerticalBox> JournalEvidenceListBox;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> EvidenceCountText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CloseJournalButton;
 
 	// ----- 証拠詳細パネル (ポップアップ) -----

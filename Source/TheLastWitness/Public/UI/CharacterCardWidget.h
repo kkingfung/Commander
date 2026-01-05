@@ -76,6 +76,9 @@ protected:
 	TObjectPtr<UProgressBar> TrustBar;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TrustLevelText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> EmotionText;
 
 	UPROPERTY(meta = (BindWidgetOptional))

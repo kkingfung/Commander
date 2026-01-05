@@ -318,6 +318,13 @@ void UMainGameWidget::OnEvidenceCollected(const FEvidence& Evidence)
 
 	// 証拠リストを更新
 	UpdateEvidenceList();
+
+	// 証拠数を更新
+	if (EvidenceCountText && CaseState)
+	{
+		const int32 Count = CaseState->GetCollectedEvidence().Num();
+		EvidenceCountText->SetText(FText::FromString(FString::Printf(TEXT("収集済み証拠: %d 件"), Count)));
+	}
 }
 
 void UMainGameWidget::OnGameEnded(const FGameResult& Result)
@@ -484,8 +491,16 @@ void UMainGameWidget::UpdateABELPanel()
 	ABELSuggestionsBox->ClearChildren();
 
 	const TArray<FABELSuggestion> Suggestions = ABELSystem->GetCurrentSuggestions();
+	int32 ActiveSuggestionCount = 0;
+
 	for (const FABELSuggestion& S : Suggestions)
 	{
+		// 既に処理済みの提案はスキップ
+		if (S.bHasBeenShown)
+		{
+			continue;
+		}
+
 		if (ABELSuggestionClass)
 		{
 			UABELSuggestionWidget* SuggestionWidget = CreateWidget<UABELSuggestionWidget>(GetOwningPlayer(), ABELSuggestionClass);
@@ -495,6 +510,7 @@ void UMainGameWidget::UpdateABELPanel()
 				SuggestionWidget->OnAccepted.AddDynamic(this, &UMainGameWidget::OnABELSuggestionAccepted);
 				SuggestionWidget->OnIgnored.AddDynamic(this, &UMainGameWidget::OnABELSuggestionIgnored);
 				ABELSuggestionsBox->AddChild(SuggestionWidget);
+				ActiveSuggestionCount++;
 			}
 		}
 		else
@@ -507,6 +523,15 @@ void UMainGameWidget::UpdateABELPanel()
 	if (ABELSystem->HasPendingComment() && ABELMessageText)
 	{
 		ABELMessageText->SetText(ABELSystem->GetAndClearPendingComment());
+	}
+
+	// 提案がない場合のメッセージ
+	if (ActiveSuggestionCount == 0 && ABELMessageText)
+	{
+		if (ABELMessageText->GetText().IsEmpty())
+		{
+			ABELMessageText->SetText(FText::FromString(TEXT("現在、新たな提案はありません。調査を続けてください。")));
+		}
 	}
 }
 
@@ -677,6 +702,9 @@ void UMainGameWidget::OnABELSuggestionAccepted(FName SuggestionId)
 	{
 		GameMode->FollowABELSuggestion(SuggestionId);
 	}
+
+	// ABELパネルを更新して提案リストをリフレッシュ
+	UpdateABELPanel();
 }
 
 void UMainGameWidget::OnABELSuggestionIgnored(FName SuggestionId)
@@ -687,6 +715,9 @@ void UMainGameWidget::OnABELSuggestionIgnored(FName SuggestionId)
 	{
 		GameMode->IgnoreABELSuggestion(SuggestionId);
 	}
+
+	// ABELパネルを更新して提案リストをリフレッシュ
+	UpdateABELPanel();
 }
 
 void UMainGameWidget::OnLocationCardClicked(ELocation Location)
@@ -716,13 +747,18 @@ void UMainGameWidget::OnSuspectAccused(FName CharacterId)
 
 void UMainGameWidget::OnDeductionSlotClicked(int32 SlotIndex)
 {
-	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理スロット%dがクリックされました"), SlotIndex);
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理スロット%dがクリックされました (スロット数: %d)"), SlotIndex, DeductionSlots.Num());
 	CurrentDeductionSlot = SlotIndex;
 
 	// 選択状態を表示
 	if (DeductionResultText)
 	{
 		DeductionResultText->SetText(FText::FromString(FString::Printf(TEXT("スロット%dに配置する証拠を選択してください"), SlotIndex + 1)));
+		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 結果テキストを更新しました"));
+	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] DeductionResultTextがnullです"));
 	}
 
 	// スロットの選択状態を視覚的に更新
@@ -902,8 +938,13 @@ void UMainGameWidget::TryMakeDeduction()
 		return;
 	}
 
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] スロット0: %s, スロット1: %s"),
+		*DeductionSlotEvidence[0].ToString(),
+		*DeductionSlotEvidence[1].ToString());
+
 	if (DeductionSlotEvidence[0].IsNone() || DeductionSlotEvidence[1].IsNone())
 	{
+		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠が足りません"));
 		if (DeductionResultText)
 		{
 			DeductionResultText->SetText(FText::FromString(TEXT("2つの証拠を選択してください")));
@@ -911,21 +952,37 @@ void UMainGameWidget::TryMakeDeduction()
 		return;
 	}
 
-	const bool bSuccess = GameMode->TryMakeDeduction(DeductionSlotEvidence[0], DeductionSlotEvidence[1]);
+	FDeduction OutDeduction;
+	const bool bSuccess = GameMode->TryMakeDeduction(DeductionSlotEvidence[0], DeductionSlotEvidence[1], OutDeduction);
+
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理結果: %s"), bSuccess ? TEXT("成功") : TEXT("失敗"));
 
 	if (DeductionResultText)
 	{
 		if (bSuccess)
 		{
-			DeductionResultText->SetText(FText::FromString(TEXT("新たな推理を導きました！")));
+			// 推理のタイトルと説明を表示
+			const FString ResultMessage = FString::Printf(
+				TEXT("【%s】\n%s"),
+				*OutDeduction.Title.ToString(),
+				*OutDeduction.Description.ToString()
+			);
+			DeductionResultText->SetText(FText::FromString(ResultMessage));
+			UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理成功: %s"), *OutDeduction.Title.ToString());
 		}
 		else
 		{
 			DeductionResultText->SetText(FText::FromString(TEXT("この組み合わせからは何も導けません...")));
 		}
 	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] DeductionResultTextがバインドされていません"));
+	}
 
 	// スロットをクリア
+	DeductionSlotEvidence[0] = NAME_None;
+	DeductionSlotEvidence[1] = NAME_None;
 	for (UDeductionSlotWidget* SlotWidget : DeductionSlots)
 	{
 		if (SlotWidget)
@@ -963,6 +1020,17 @@ void UMainGameWidget::ShowJournalPanel()
 				JournalEvidenceListBox->AddChild(Card);
 			}
 		}
+	}
+
+	// 証拠数を更新
+	if (EvidenceCountText)
+	{
+		EvidenceCountText->SetText(FText::FromString(FString::Printf(TEXT("収集済み証拠: %d 件"), CollectedEvidence.Num())));
+		UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] EvidenceCountTextを更新: %d 件"), CollectedEvidence.Num());
+	}
+	else
+	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] EvidenceCountTextがバインドされていません"));
 	}
 
 	JournalPopupPanel->SetVisibility(ESlateVisibility::Visible);
@@ -1072,11 +1140,17 @@ void UMainGameWidget::HideEvidenceDetail()
 
 void UMainGameWidget::OnDeductionEvidenceCardClicked(FName EvidenceId)
 {
-	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理用証拠がクリックされました: %s (スロット: %d)"), *EvidenceId.ToString(), CurrentDeductionSlot);
+	UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 推理用証拠がクリックされました: %s (現在のスロット: %d, スロット数: %d)"),
+		*EvidenceId.ToString(), CurrentDeductionSlot, DeductionSlots.Num());
 
 	// スロットが選択されていない場合は無視
 	if (CurrentDeductionSlot < 0 || CurrentDeductionSlot >= DeductionSlots.Num())
 	{
+		UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] スロットが選択されていません。まずスロットをクリックしてください。"));
+		if (DeductionResultText)
+		{
+			DeductionResultText->SetText(FText::FromString(TEXT("まずスロットをクリックしてください")));
+		}
 		return;
 	}
 
@@ -1100,20 +1174,46 @@ void UMainGameWidget::OnDeductionEvidenceCardClicked(FName EvidenceId)
 		if (CaseState->GetEvidenceById(EvidenceId, Evidence))
 		{
 			DeductionSlotEvidence[CurrentDeductionSlot] = EvidenceId;
+			UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] 証拠をスロット%dに設定: %s"), CurrentDeductionSlot, *EvidenceId.ToString());
 
 			if (DeductionSlots[CurrentDeductionSlot])
 			{
 				DeductionSlots[CurrentDeductionSlot]->SetEvidence(Evidence);
 			}
 
+			// 両方のスロットに証拠があるかチェック
+			const bool bBothSlotsFilled = !DeductionSlotEvidence[0].IsNone() && !DeductionSlotEvidence[1].IsNone();
+			UE_LOG(LogLastWitness, Log, TEXT("[MainGameWidget] スロット状態 - 0: %s, 1: %s, 両方埋まった: %s"),
+				*DeductionSlotEvidence[0].ToString(),
+				*DeductionSlotEvidence[1].ToString(),
+				bBothSlotsFilled ? TEXT("Yes") : TEXT("No"));
+
 			// スロット選択を解除
 			CurrentDeductionSlot = -1;
+			for (UDeductionSlotWidget* SlotWidget : DeductionSlots)
+			{
+				if (SlotWidget)
+				{
+					SlotWidget->SetSelected(false);
+				}
+			}
 
-			// 結果テキストをクリア
+			// 結果テキストを更新
 			if (DeductionResultText)
 			{
-				DeductionResultText->SetText(FText::GetEmpty());
+				if (bBothSlotsFilled)
+				{
+					DeductionResultText->SetText(FText::FromString(TEXT("「推理する」ボタンで結果を確認")));
+				}
+				else
+				{
+					DeductionResultText->SetText(FText::FromString(TEXT("もう1つの証拠を選択してください")));
+				}
 			}
+		}
+		else
+		{
+			UE_LOG(LogLastWitness, Warning, TEXT("[MainGameWidget] 証拠が見つかりません: %s"), *EvidenceId.ToString());
 		}
 	}
 }

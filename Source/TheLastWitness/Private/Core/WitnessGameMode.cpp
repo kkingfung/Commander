@@ -57,6 +57,12 @@ void AWitnessGameMode::StartCase()
 		CaseState->InitializeCase(CaseData);
 	}
 
+	// DialogueManagerに対話ツリーを登録（CaseState初期化後）
+	if (DialogueManager && CaseState)
+	{
+		DialogueManager->Initialize(CaseState);
+	}
+
 	// ABELを初期化
 	if (ABELSystem)
 	{
@@ -321,14 +327,13 @@ void AWitnessGameMode::OpenDeductionBoard()
 	SetPhase(EGamePhase::Deduction);
 }
 
-bool AWitnessGameMode::TryMakeDeduction(FName EvidenceA, FName EvidenceB)
+bool AWitnessGameMode::TryMakeDeduction(FName EvidenceA, FName EvidenceB, FDeduction& OutDeduction)
 {
 	if (!CaseState)
 	{
 		return false;
 	}
 
-	FDeduction OutDeduction;
 	const bool bSuccess = CaseState->TryDeduction(EvidenceA, EvidenceB, OutDeduction);
 
 	if (bSuccess && ABELSystem)
